@@ -6,8 +6,13 @@ resource "aws_instance" "bastion" {
   security_groups = [aws_security_group.bastion_sg.id]
   key_name        = aws_key_pair.this.key_name
 
+  user_data = <<-EOF
+              #!/bin/bash
+              hostnamectl set-hostname ${local.common_name}-bastion
+              EOF
+
   tags = {
-    Name = "cilium-demo-bastion"
+    Name = "${local.common_name}-bastion"
   }
 }
 
@@ -17,7 +22,7 @@ resource "aws_eip" "bastion" {
 }
 
 resource "aws_security_group" "bastion_sg" {
-  name        = "cilium-demo-bastion-sg"
+  name        = "${local.common_name}-bastion-sg"
   description = "Security group for bastion host"
   vpc_id      = module.vpc.vpc_raw.id
 
@@ -35,7 +40,8 @@ resource "aws_security_group_rule" "bastion_ssh_inbound" {
   to_port           = 22
   protocol          = "tcp"
   security_group_id = aws_security_group.bastion_sg.id
-  cidr_blocks       = ["${chomp(data.http.myip.response_body)}/32"]
+  # cidr_blocks       = ["${chomp(data.http.myip.response_body)}/32"]
+  cidr_blocks = ["0.0.0.0/0"]
 }
 
 data "http" "myip" {

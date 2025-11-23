@@ -1,6 +1,6 @@
 resource "aws_instance" "controlplane" {
   ami           = data.aws_ami.ubuntu.id
-  instance_type = "t3.micro"
+  instance_type = "t3.small"
 
   key_name = aws_key_pair.this.key_name
 
@@ -9,7 +9,7 @@ resource "aws_instance" "controlplane" {
   }
 
   tags = {
-    Name = "k8s_controlplane"
+    Name = "${local.common_name}-controlplane"
   }
 }
 
@@ -22,13 +22,13 @@ resource "aws_network_interface" "controlplane" {
   ]
 
   tags = {
-    Name = "controlplane-private-ip"
+    Name = "${local.common_name}-controlplane-private-ip"
   }
 }
 
 resource "aws_instance" "k8s_node_01" {
   ami           = data.aws_ami.ubuntu.id
-  instance_type = "t3.micro"
+  instance_type = "t3.small"
 
   key_name = aws_key_pair.this.key_name
 
@@ -37,7 +37,7 @@ resource "aws_instance" "k8s_node_01" {
   }
 
   tags = {
-    Name = "k8s_node_01"
+    Name = "${local.common_name}-k8s-node-01"
   }
 }
 
@@ -50,13 +50,13 @@ resource "aws_network_interface" "k8s_node_01" {
   ]
 
   tags = {
-    Name = "k8s_node_01"
+    Name = "${local.common_name}-k8s-node-01-private-ip"
   }
 }
 
 resource "aws_instance" "k8s_node_02" {
   ami           = data.aws_ami.ubuntu.id
-  instance_type = "t3.micro"
+  instance_type = "t3.small"
 
   key_name = aws_key_pair.this.key_name
 
@@ -65,7 +65,7 @@ resource "aws_instance" "k8s_node_02" {
   }
 
   tags = {
-    Name = "k8s_node_02"
+    Name = "${local.common_name}-k8s-node-02"
   }
 }
 
@@ -78,12 +78,12 @@ resource "aws_network_interface" "k8s_node_02" {
   ]
 
   tags = {
-    Name = "k8s_node_02"
+    Name = "${local.common_name}-k8s-node-02-private-ip"
   }
 }
 
 resource "aws_security_group" "k8s" {
-  name        = "cilium-demo-k8s-sg"
+  name        = "${local.common_name}-k8s-sg"
   description = "Security group for k8s hosts"
   vpc_id      = module.vpc.vpc_raw.id
 
@@ -120,13 +120,13 @@ resource "aws_security_group_rule" "allow_internal" {
 }
 
 output "controlplane_connection_string" {
-  value = "ssh -o 'ProxyCommand=ssh -i ${local_file.private_key.filename} -W %h:%p ubuntu@${aws_eip.bastion.public_ip}' -i ${local_file.private_key.filename} ubuntu@${aws_network_interface.controlplane.private_ip}"
+  value = "ssh -o 'UserKnownHostsFile=/dev/null' -o 'StrictHostKeyChecking=no' -o 'ProxyCommand=ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${local_file.private_key.filename} -W %h:%p ubuntu@${aws_eip.bastion.public_ip}' -i ${local_file.private_key.filename} ubuntu@${aws_network_interface.controlplane.private_ip}"
 }
 
 output "node01_connection_string" {
-  value = "ssh -o 'ProxyCommand=ssh -i ${local_file.private_key.filename} -W %h:%p ubuntu@${aws_eip.bastion.public_ip}' -i ${local_file.private_key.filename} ubuntu@${aws_network_interface.k8s_node_01.private_ip}"
+  value = "ssh -o 'UserKnownHostsFile=/dev/null' -o 'StrictHostKeyChecking=no' -o 'ProxyCommand=ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${local_file.private_key.filename} -W %h:%p ubuntu@${aws_eip.bastion.public_ip}' -i ${local_file.private_key.filename} ubuntu@${aws_network_interface.k8s_node_01.private_ip}"
 }
 
 output "node02_connection_string" {
-  value = "ssh -o 'ProxyCommand=ssh -i ${local_file.private_key.filename} -W %h:%p ubuntu@${aws_eip.bastion.public_ip}' -i ${local_file.private_key.filename} ubuntu@${aws_network_interface.k8s_node_02.private_ip}"
+  value = "ssh -o 'UserKnownHostsFile=/dev/null' -o 'StrictHostKeyChecking=no' -o 'ProxyCommand=ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${local_file.private_key.filename} -W %h:%p ubuntu@${aws_eip.bastion.public_ip}' -i ${local_file.private_key.filename} ubuntu@${aws_network_interface.k8s_node_02.private_ip}"
 }
