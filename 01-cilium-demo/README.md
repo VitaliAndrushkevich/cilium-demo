@@ -139,25 +139,34 @@ ip-10-10-11-21   Ready    <none>                 73s   v1.33.5+k3s1
 cilium connectivity test
 ```
 
------
+At that stage we should have k3s and cilium up and running. For the next steps we are going to enable l2 anouncement.
+
+```txt
+L2 (Layer 2) announcement in Cilium allows Kubernetes service and pod IPs to be advertised directly on the local network using ARP, making them reachable from outside the cluster without extra load balancers or NAT. This is especially important in on-premises or bare-metal environments, where cloud-native load balancers are not available. By enabling L2 announcement, Cilium ensures that external devices on the same network segment can access Kubernetes services as if they were native hosts. This simplifies network integration and service exposure in non-cloud setups. In summary, L2 announcement bridges Kubernetes networking with traditional LANs, making services easily accessible in on-prem environments.
+```
+
+And in parallel we are going to enable envoy ingress controller that cilium includs as an option in its installation.
+
+> Keep please in mind, that networking concept in AWS is a bit different that on usual on-premises environments. We are gonna simmulate this behavior. We are doing that for education purpose only - this is not production ready solution.
+
+Upgrade cilium installation:
+
+Prepare the values:
 
 ```yaml
 cluster:
   name: cilium-demo-01
 
-ipam:
-  mode: kubernetes
-
-kubeProxyReplacement: true # This option we have to specify as we are using 
+kubeProxyReplacement: true
 k8sServiceHost: 10.10.11.10 # This is controlplane IP, it's needed when we have kube-proxy replacement
 k8sServicePort: 6443
 
-# Use native routing (no tunneling)
-# routingMode: native
-# autoDirectNodeRoutes: true
-
-# Set native routing CIDR to only include pod CIDR
-# ipv4NativeRoutingCIDR: 10.42.0.0/16
+# Enable L2 announcements for LoadBalancer services
+l2announcements:
+  enabled: true
+  leaseDuration: 3s
+  leaseRenewDeadline: 1s
+  leaseRetryPeriod: 200ms
 
 # Enable L2 neighbor discovery - This is needed to be able to work Load Balancer concept
 l2NeighDiscovery:
@@ -169,15 +178,60 @@ ingressController:
   loadbalancerMode: shared
   default: true
 
-# Enable external IPs support
 externalIPs:
   enabled: true
 ```
 
 ```sh
+# Don't forget to export KUBE_CONFIG env or copy the config to the ~/.kube/config
+cilium upgrade --reuse-values -f cilium-values.yaml
+```
+
+As we install everything using cilium cli we have to keep in mind
+
+At the next stage we are going to set `CiliumL2AnnouncementPolicy`:
+
+```sh
+cat << EOF | kubectl apply -f -
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: l2-policy
+spec:
+  serviceSelector: {}
+  nodeSelector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: DoesNotExist
+  interfaces:
+  - ^eth[0-9]+ # This should be checked and modified if you have another interface name pattern
+  externalIPs: true
+  loadBalancerIPs: true
+EOF
+```
+
+`nodeSelector` was defined as an example to show that we can be configurable.
+`serviceSelector` might be also a good option to select the needed services and put different anouncement policies on them.
+
+The next step is to set ip pools that being used for l2 anouncement:
+
+```sh
+cat << EOF | kubectl apply -f -
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: "lb-pool"
+spec:
+  blocks:
+  - start: "10.10.11.5"
+    stop: "10.10.11.7"
+EOF
+```
+
+To restart the cilium pods we might need this command.
+
+```sh
 export KUBECONFIG="/etc/rancher/k3s/k3s.yaml"
-cilium install -f values.yml
-cilium status --wait
 
 kubectl rollout restart -n kube-system deploy/cilium-operator
 kubectl rollout restart -n kube-system ds/cilium
