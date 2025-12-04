@@ -2,6 +2,14 @@
 
 Lab environment:
 
+In this laboratory we are going to explore:
+
+- AWS and Terraform: for preparation of the infrastructure to run our workloads
+
+- K3s: run the k3s cluster with one controlplane and two worker nodes
+
+- Cilium: install Cilium CNI to the preconfigured k3s cluster with kube-proxy replacement, l2 announcement and ingress controller features enabled.
+
 ![scheme](./images/cilium-demo-01.png)
 
 1. Apply Terraform configuration by entering the terraform directory and running `terraform apply`.
@@ -99,7 +107,13 @@ You can configure Cilium in different ways:
       cilium version
       ```
 
-5. Install Cilium.
+5. Install Cilium to the cluster.
+
+   Before installation, let's understand the key parameters we're setting:
+
+   - **`kubeProxyReplacement=true`** - Enables Cilium's eBPF-based kube-proxy replacement. This replaces the traditional iptables-based kube-proxy with a more efficient eBPF implementation that provides better performance, scalability, and observability. Since we disabled kube-proxy during k3s installation (`--disable-kube-proxy`), Cilium will handle all service load balancing and routing using eBPF programs running directly in the Linux kernel.
+
+   - **`k8sServiceHost`** and **`k8sServicePort`** - Specify the Kubernetes API server endpoint that Cilium should use. When kube-proxy is disabled, Cilium needs to know how to reach the Kubernetes API server directly since it can't rely on kube-proxy to handle the service endpoint for `kubernetes.default.svc`. We set these to the control plane node's IP (`10.10.11.10`) and the API server port (`6443`) to ensure Cilium can communicate with the API server for watching service and endpoint changes.
 
    **Option A: Install using Cilium CLI:**
 
